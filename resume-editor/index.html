@@ -1,0 +1,1741 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>在线简历编辑器（双栏 A4 模板）</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { background: #4a5560; font-family: "微软雅黑", "Microsoft YaHei", "PingFang SC", sans-serif; color: #333; }
+
+  /* 屏幕端操作条：打印时自动隐藏 */
+  .toolbar { position: sticky; top: 0; z-index: 9; background: #2f3a44; color: #cfe3f2; font-size: 12.5px; padding: 9px 16px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .toolbar b { color: #fff; }
+  .toolbar span.tips { flex: 1 1 320px; line-height: 1.6; }
+  .toolbar button { background: #1c7cc0; border: 0; color: #fff; padding: 6px 13px; border-radius: 3px; cursor: pointer; font-size: 12.5px; white-space: nowrap; }
+  .toolbar button:hover { background: #1668a3; }
+  .toolbar button.ghost { background: #54616d; }
+  .toolbar button.ghost:hover { background: #43505b; }
+  #saveState { font-size: 12px; color: #8fd08f; white-space: nowrap; }
+
+  .page { width: 210mm; min-height: 297mm; margin: 18px auto; background: #fff; box-shadow: 0 4px 22px rgba(0,0,0,.45); }
+
+  /* 表格布局：跨页打印时侧栏底色连续 */
+  table.layout { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  td.side { width: 33%; background: #1c7cc0; color: #fff; vertical-align: top; padding: 0 0 30px 0; }
+  td.main { width: 67%; background: #fff; vertical-align: top; padding: 34px 30px 40px 26px; }
+
+  /* ── 左侧栏 ── */
+  .photoZone { background: #3c4348; padding: 26px 0 22px 0; text-align: center; }
+  .photo { width: 108px; height: 142px; margin: 0 auto; background: #d8dde2; border: 2px dashed #9fb3c0; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #6b7a86; cursor: pointer; overflow: hidden; }
+  .photo img { width: 100%; height: 100%; object-fit: cover; display: none; }
+  .side h2 { font-size: 17px; letter-spacing: 2px; margin: 26px 22px 12px 22px; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,.55); font-weight: 700; }
+  .infoList { margin: 0 22px; font-size: 12.5px; line-height: 2.15; }
+  .infoList .row { display: flex; gap: 9px; align-items: center; }
+  .infoList .ico { width: 15px; text-align: center; opacity: .9; flex: none; }
+  .skill { margin: 0 22px 13px 22px; font-size: 12.5px; }
+  .skill .top { display: flex; justify-content: space-between; margin-bottom: 5px; }
+  .bar { height: 6px; background: rgba(255,255,255,.35); border-radius: 3px; overflow: hidden; }
+  .fill { height: 100%; background: #bfe0f5; border-radius: 3px; }
+  .tags { margin: 0 18px; }
+  .tags span { display: inline-block; border: 1px solid #fff; border-radius: 3px; padding: 4px 10px; margin: 0 5px 9px 0; font-size: 12px; }
+
+  /* ── 右侧主区 ── */
+  .name { font-size: 27px; color: #1c7cc0; letter-spacing: 3px; margin: 0 0 6px 0; font-weight: 700; }
+  .wish { font-size: 13px; color: #555; margin: 0 0 4px 0; }
+  .main h2 { font-size: 16.5px; color: #1c7cc0; letter-spacing: 2px; margin: 24px 0 10px 0; padding-bottom: 6px; border-bottom: 1.5px solid #1c7cc0; font-weight: 700; }
+  .main h2.first { margin-top: 16px; }
+  .jobHead { display: flex; justify-content: space-between; font-size: 13px; font-weight: 700; color: #222; margin: 10px 0 5px 0; gap: 10px; }
+  .jobHead .co { font-weight: 400; color: #444; flex: 1; text-align: center; }
+  .main ul { margin: 3px 0 8px 0; padding-left: 18px; font-size: 12.5px; line-height: 1.75; }
+  .main li { margin-bottom: 3px; }
+  .kv { font-size: 12.5px; line-height: 1.8; margin: 0 0 4px 0; }
+  .kv b { color: #222; }
+  .projMeta { font-size: 12.5px; line-height: 1.8; margin: 2px 0 6px 0; }
+  .footNote { font-size: 11px; color: #999; margin-top: 18px; }
+
+  /* 编辑态：可编辑区聚焦时给淡色描边，便于看清当前光标位置 */
+  [contenteditable="true"]:focus { outline: 1px dashed rgba(28,124,192,.55); outline-offset: 2px; }
+  td.side [contenteditable="true"]:focus { outline-color: rgba(255,255,255,.7); }
+
+  /* 填写提示：只在屏幕显示，打印时消失 */
+  .tip { font-size: 11px; color: #a05b00; background: #fff6e5; border-left: 3px solid #e8a33d; padding: 5px 9px; margin: 6px 0 10px 0; line-height: 1.6; }
+  td.side .tip { color: #ffe9c2; background: rgba(0,0,0,.16); border-left-color: rgba(255,255,255,.7); }
+  body.hideTips .tip { display: none; }
+
+  /* 新增经历块：删除按钮只在屏幕显示 */
+  .delRow { text-align: right; margin: 8px 0 0 0; }
+  .delBtn { display: inline-block; font-size: 11px; color: #a33; background: #fdeaea; border: 1px solid #e5b4b4; border-radius: 3px; padding: 2px 8px; cursor: pointer; }
+  .delBtn:hover { background: #f7d4d4; }
+
+  /* 照片取景调整弹窗 */
+  #cropOverlay { display: none; position: fixed; inset: 0; background: rgba(15,20,26,.72); z-index: 50; align-items: center; justify-content: center; }
+  #cropOverlay.on { display: flex; }
+  .cropPanel { background: #fff; border-radius: 6px; padding: 18px 22px 16px 22px; width: 430px; box-shadow: 0 10px 40px rgba(0,0,0,.5); }
+  .cropPanel h3 { margin: 0 0 6px 0; font-size: 16px; color: #1c7cc0; }
+  .cropPanel .hint { font-size: 11.5px; color: #666; line-height: 1.6; margin: 0 0 10px 0; }
+  #cropStage { width: 320px; height: 420px; margin: 0 auto 12px auto; position: relative; overflow: hidden; background: #3c4348; border: 2px solid #1c7cc0; cursor: move; user-select: none; }
+  #cropImg { position: absolute; left: 50%; top: 50%; transform-origin: center center; pointer-events: none; max-width: none; }
+  .cropRow { display: flex; align-items: center; gap: 10px; margin: 6px 0; font-size: 12px; color: #444; }
+  .cropRow label { width: 34px; flex: none; }
+  .cropRow input { flex: 1; }
+  .cropRow .val { width: 44px; text-align: right; color: #888; font-size: 11px; flex: none; }
+  .cropBtns { text-align: right; margin-top: 10px; }
+  .cropBtns button { background: #eee; border: 1px solid #ccc; border-radius: 3px; padding: 6px 14px; margin-left: 8px; cursor: pointer; font-size: 12.5px; }
+  .cropBtns button.primary { background: #1c7cc0; border-color: #1668a3; color: #fff; }
+  .cropBtns button:hover { filter: brightness(.95); }
+
+  @page { size: A4; margin: 0; }
+  @media print {
+    body { background: #fff; }
+    .toolbar { display: none; }
+    .tip { display: none !important; }
+    .delRow { display: none !important; }
+    #cropOverlay { display: none !important; }
+    .page { width: auto; min-height: 0; margin: 0; box-shadow: none; }
+    [contenteditable="true"]:focus { outline: none; }
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+</style>
+</head>
+<body>
+
+<div id="envWarn" style="display:none;background:#b3261e;color:#fff;font-size:13px;padding:10px 16px;line-height:1.6;">
+  <b>当前处于受限预览环境，无法导出或打印。</b>请复制下面的文件路径，在「此电脑」地址栏粘贴打开，或右键该文件 → 打开方式 → Edge / Chrome：<br>
+  <code id="envPath" style="background:rgba(255,255,255,.18);padding:2px 6px;border-radius:3px;user-select:all;"></code>
+</div>
+
+<div class="toolbar">
+  <b>简历编辑模式</b>
+  <span class="tips">① 点任意文字直接改；② 自动暂存在本机浏览器；③ 照片：点照片框或拖入图片 → 弹出取景窗，拖动 / 滚轮 / 滑杆调好位置缩放后点「应用到简历」，截图不全就先放大再拖；④ 导出 PDF 时务必勾选「背景图形」，否则蓝色侧栏会丢。</span>
+  <span id="saveState">已自动暂存</span>
+  <button type="button" onclick="doPrint()">打印 / 导出 PDF</button>
+  <button type="button" onclick="addExperience()">＋ 新增工作经历</button>
+  <button type="button" onclick="downloadHTML()">另存为文件</button>
+  <button type="button" class="ghost" onclick="openInBrowser()">在新标签页打开</button>
+  <button type="button" class="ghost" onclick="copyHTML()">复制全部代码</button>
+  <button type="button" class="ghost" onclick="toggleTips(this)">清除提示行</button>
+  <button type="button" class="ghost" onclick="resetTemplate()">恢复模板原文</button>
+  
+</div>
+
+<!-- 图片选择控件：放在简历主体之外，替换内容时不会被清掉 -->
+<input type="file" id="photoInput" accept="image/*" style="position:fixed;left:-9999px;top:0;">
+
+<!-- 照片取景调整弹窗 -->
+<div id="cropOverlay">
+  <div class="cropPanel">
+    <h3>调整照片取景</h3>
+    <p class="hint">拖动照片调整位置，滚轮或「缩放」滑杆放大缩小，「横 / 纵 / 旋转」可微调。深色框就是简历上的照片框，框内部分才会显示；先放大再把脸拖到框中央即可解决截图不全的问题。</p>
+    <div id="cropStage"><img id="cropImg" alt=""></div>
+    <div class="cropRow"><label>缩放</label><input type="range" id="cZoom" min="40" max="300" value="100"><span class="val" id="vZoom">100%</span></div>
+    <div class="cropRow"><label>横移</label><input type="range" id="cX" min="-300" max="300" value="0"><span class="val" id="vX">0</span></div>
+    <div class="cropRow"><label>纵移</label><input type="range" id="cY" min="-350" max="350" value="0"><span class="val" id="vY">0</span></div>
+    <div class="cropRow"><label>旋转</label><input type="range" id="cR" min="-45" max="45" value="0"><span class="val" id="vR">0°</span></div>
+    <div class="cropBtns">
+      <button onclick="cropPickNew()">换一张图</button>
+      <button onclick="cropReset()">重置</button>
+      <button onclick="cropClose()">取消</button>
+      <button class="primary" onclick="cropApply()">应用到简历</button>
+    </div>
+  </div>
+</div>
+
+<div class="page" id="resume">
+<table class="layout"><tr>
+
+<!-- ═══════════ 左侧栏 ═══════════ -->
+<td class="side">
+  <div class="photoZone">
+    <div class="photo" id="photoBox" title="点击选择图片，或把图片文件直接拖进来">
+      <span id="photoTip">
+        点击选图 / 拖入图片<br>
+        选图后可拖动缩放裁剪<br>
+        <span style="font-size:10px;">（光标停在框内按 Delete 清除）</span>
+      </span>
+      <img id="photoImg" alt="证件照">
+    </div>
+  </div>
+
+  <h2>基本信息</h2>
+  <div class="infoList" contenteditable="true">
+    <div class="row"><span class="ico">◈</span><span>【年龄】</span></div>
+    <div class="row"><span class="ico">◉</span><span>【所在城市】</span></div>
+    <div class="row"><span class="ico">✆</span><span>【联系电话】</span></div>
+    <div class="row"><span class="ico">✉</span><span>【电子邮箱】</span></div>
+    <div class="row"><span class="ico">⌂</span><span>【求职意向 / 可接受出差情况】</span></div>
+    <div class="row"><span class="ico">◷</span><span>【到岗时间】</span></div>
+  </div>
+
+  <h2>技能特长</h2>
+  <div class="skill">
+    <div class="top" contenteditable="true"><span>【技能名称】</span><span>【掌握程度】</span></div>
+    <div class="bar"><div class="fill" style="width:0%"></div></div>
+  </div>
+  <div class="skill">
+    <div class="top" contenteditable="true"><span>【技能名称】</span><span>【掌握程度】</span></div>
+    <div class="bar"><div class="fill" style="width:0%"></div></div>
+  </div>
+  <div class="skill">
+    <div class="top" contenteditable="true"><span>【技能名称】</span><span>【掌握程度】</span></div>
+    <div class="bar"><div class="fill" style="width:0%"></div></div>
+  </div>
+  <div class="skill">
+    <div class="top" contenteditable="true"><span>【技能名称】</span><span>【掌握程度】</span></div>
+    <div class="bar"><div class="fill" style="width:0%"></div></div>
+  </div>
+  <div class="tip">技能名称和掌握程度请按实际情况填写；不需要进度条时可删除对应技能块。</div>
+
+  <h2>兴趣爱好</h2>
+  <div class="tags" contenteditable="true">
+    <span>【兴趣爱好】</span>
+    <span>【兴趣爱好】</span>
+    <span>【兴趣爱好】</span>
+  </div>
+  <div class="tip">没有需要展示的兴趣爱好时，可删除本栏目。</div>
+</td>
+
+
+<!-- ═══════════ 右侧主区 ═══════════ -->
+<td class="main">
+  <div class="name" contenteditable="true">【姓名】</div>
+  <p class="wish" contenteditable="true">求职意向：【目标职位】</p>
+  <p class="wish" contenteditable="true">作品集 / 个人主页：【链接；没有可删除本行】</p>
+
+  <h2 class="first">工作经历</h2>
+
+  <div class="jobHead" contenteditable="true">
+    <span>【起止时间】</span>
+    <span class="co">【公司名称】</span>
+    <span>【职位名称】</span>
+  </div>
+  <ul contenteditable="true">
+    <li>【填写你的职责、采取的行动和实际结果；没有相关经历时可删除本段】</li>
+  </ul>
+  <div class="tip">请填写真实经历和可核实成果；没有工作经历时，可将本段改为实习经历、项目经历或删除。</div>
+
+  <div id="expInsertPoint"></div>
+  <div class="tip" style="background:#eaf4fb;border-left-color:#1c7cc0;color:#0f3d63;">
+    点击顶部“新增工作经历”可添加经历。提示行不会打印，也可以通过顶部按钮隐藏。
+  </div>
+
+  <h2>自我评价</h2>
+  <div contenteditable="true">
+    <p class="kv">【用简短文字概括与你应聘岗位相关的经验、优势和工作方式；请按实际情况填写】</p>
+  </div>
+
+  <h2>专业技能</h2>
+  <div contenteditable="true">
+    <p class="kv"><b>【技能类别】：</b>【填写掌握的工具、技术或方法】</p>
+    <p class="kv"><b>【技能类别】：</b>【填写掌握的工具、技术或方法】</p>
+  </div>
+
+  <h2>项目经验</h2>
+  <div class="jobHead" contenteditable="true">
+    <span>【项目时间】</span>
+    <span class="co">【项目名称】</span>
+    <span>【担任角色】</span>
+  </div>
+  <div contenteditable="true">
+    <p class="projMeta"><b>项目背景：</b>【简要说明项目目标或应用场景】</p>
+    <p class="projMeta"><b>使用技术：</b>【填写实际使用的工具、技术或平台】</p>
+  </div>
+  <ul contenteditable="true">
+    <li>【说明你负责的具体工作，以及使用的方法】</li>
+    <li>【说明实际完成的结果；没有可量化数据时不要编造数字】</li>
+  </ul>
+
+  <h2>教育背景</h2>
+  <div class="jobHead" contenteditable="true">
+    <span>【就读时间】</span>
+    <span class="co">【学校名称】</span>
+    <span>【专业 / 学历】</span>
+  </div>
+  <p class="kv" contenteditable="true">
+    主修课程 / 证书 / 奖项：【按实际情况填写；没有可删除本行】
+  </p>
+
+  <p class="footNote tip" style="margin-top:18px">
+    定稿前请删除提示行，检查占位符、联系方式及所有成果数据，并确认个人信息适合公开。
+  </p>
+</td>
+
+</tr></table>
+</div>
+
+<script>
+  var resume = document.getElementById('resume');
+  var saveState = document.getElementById('saveState');
+  var photoInput = document.getElementById('photoInput');
+/*
+ * 保存 HTML 文件中原始的空白模板。
+ * 必须放在 restore() 执行之前。
+ */
+  var DEFAULT_RESUME_HTML = resume.innerHTML;
+
+/* 恢复模板期间禁止 beforeunload 再保存旧内容 */
+  var isResetting = false;
+  /*
+   * 修改模板结构时，可以把 v2 改成 v3。
+   * 不同版本使用不同缓存，避免旧页面结构覆盖新模板。
+   */
+  var KEY = 'open_robot_resume_public_v1';
+  var PHOTO_KEY = 'open_robot_resume_public_photo_v1';
+  var RAW_KEY = 'open_robot_resume_public_raw_v1';
+
+  /*
+   * 原始照片只保存在当前页面内存中。
+   * 不写入 localStorage，避免手机原图撑爆浏览器存储空间。
+   */
+  var rawPhotoData = '';
+
+  var timer = null;
+  var flashTimer = null;
+
+  /* ──────────────────────────────
+     基础工具
+  ────────────────────────────── */
+
+  function getPhotoElements() {
+    return {
+      img: document.getElementById('photoImg'),
+      tip: document.getElementById('photoTip'),
+      box: document.getElementById('photoBox')
+    };
+  }
+
+  function setPhoto(src) {
+    var els = getPhotoElements();
+
+    if (!els.img || !els.tip || !els.box || !src) return;
+
+    els.img.src = src;
+    els.img.style.display = 'block';
+    els.tip.style.display = 'none';
+    els.box.style.borderStyle = 'solid';
+    els.box.style.borderColor = 'transparent';
+  }
+
+  function flash(msg, isWarn) {
+    if (!saveState) return;
+
+    saveState.textContent = msg;
+    saveState.style.color = isWarn ? '#ff9b8f' : '#8fd08f';
+    saveState.style.flex = '1 1 100%';
+
+    clearTimeout(flashTimer);
+
+    flashTimer = setTimeout(function () {
+      saveState.textContent = '已自动暂存';
+      saveState.style.color = '#8fd08f';
+      saveState.style.flex = '';
+    }, 14000);
+  }
+
+  /*
+   * 生成用于 localStorage 的简历 HTML。
+   * 照片单独保存在 PHOTO_KEY，避免照片同时存在两份。
+   */
+  function getResumeHTMLForStorage() {
+    var clone = resume.cloneNode(true);
+    var img = clone.querySelector('#photoImg');
+    var tip = clone.querySelector('#photoTip');
+    var box = clone.querySelector('#photoBox');
+
+    if (img) {
+      img.removeAttribute('src');
+      img.style.display = 'none';
+    }
+
+    if (tip) {
+      tip.style.display = '';
+    }
+
+    if (box) {
+      box.style.borderStyle = 'dashed';
+      box.style.borderColor = '#9fb3c0';
+    }
+
+    return clone.innerHTML;
+  }
+
+  function saveNow() {
+    try {
+      localStorage.setItem(KEY, getResumeHTMLForStorage());
+
+      if (saveState) {
+        saveState.textContent = '已自动暂存';
+        saveState.style.color = '#8fd08f';
+      }
+
+      return true;
+    } catch (e) {
+      if (saveState) {
+        saveState.textContent = '暂存空间不足';
+      }
+
+      flash(
+        '浏览器暂存失败，请立即使用“另存为文件”备份；也可以清除本站浏览器数据后重试',
+        true
+      );
+
+      return false;
+    }
+  }
+
+  /*
+   * 兼容旧缓存。
+   * 如果旧版缓存中没有工作经历插入点，则自动在“自我评价”前补建。
+   */
+  function ensureExperienceInsertPoint() {
+    var point = document.getElementById('expInsertPoint');
+    if (point) return point;
+
+    var main = resume.querySelector('td.main');
+    if (!main) return null;
+
+    var headings = main.querySelectorAll('h2');
+    var selfHeading = null;
+
+    for (var i = 0; i < headings.length; i++) {
+      if (headings[i].textContent.trim() === '自我评价') {
+        selfHeading = headings[i];
+        break;
+      }
+    }
+
+    if (!selfHeading) return null;
+
+    point = document.createElement('div');
+    point.id = 'expInsertPoint';
+    main.insertBefore(point, selfHeading);
+
+    return point;
+  }
+
+  /* ──────────────────────────────
+     恢复与自动暂存
+  ────────────────────────────── */
+
+  function restore() {
+    try {
+      var saved = localStorage.getItem(KEY);
+
+      if (saved) {
+        resume.innerHTML = saved;
+      }
+
+      ensureExperienceInsertPoint();
+      bindPhoto();
+
+      var savedPhoto = localStorage.getItem(PHOTO_KEY);
+
+      if (savedPhoto) {
+        setPhoto(savedPhoto);
+        return;
+      }
+
+      /*
+       * 如果这是用户导出的独立 HTML，照片可能已经嵌入页面。
+       * 第一次打开时将嵌入照片写入该文件自己的缓存空间。
+       */
+      var embeddedImg = document.getElementById('photoImg');
+      var embeddedSrc = embeddedImg
+        ? embeddedImg.getAttribute('src')
+        : '';
+
+      if (embeddedSrc) {
+        setPhoto(embeddedSrc);
+
+        try {
+          localStorage.setItem(PHOTO_KEY, embeddedSrc);
+        } catch (e2) {}
+      }
+    } catch (e) {
+      ensureExperienceInsertPoint();
+      bindPhoto();
+    }
+  }
+
+  document.addEventListener('input', function (e) {
+    if (!resume.contains(e.target)) return;
+
+    clearTimeout(timer);
+
+    if (saveState) {
+      saveState.textContent = '正在暂存…';
+    }
+
+    timer = setTimeout(function () {
+      saveNow();
+    }, 300);
+  });
+
+  /*
+   * 页面关闭前尽量保存一次。
+   * localStorage 为同步接口，可以在此处直接调用。
+  */
+  window.addEventListener('beforeunload', function () {
+  if (!isResetting) {
+    saveNow();
+  }
+});
+
+  /* ──────────────────────────────
+     照片取景编辑器
+  ────────────────────────────── */
+
+  var crop = {
+    z: 1,
+    x: 0,
+    y: 0,
+    r: 0
+  };
+
+  var natW = 0;
+  var natH = 0;
+  var baseScale = 1;
+
+  var STAGE_W = 320;
+  var STAGE_H = 420;
+  var CANVAS_K = 2;
+
+  function cropStage() {
+    return document.getElementById('cropStage');
+  }
+
+  function cropImgEl() {
+    return document.getElementById('cropImg');
+  }
+
+  function cropRender() {
+    var img = cropImgEl();
+    if (!img) return;
+
+    img.style.transform =
+      'translate(calc(-50% + ' + crop.x + 'px), ' +
+      'calc(-50% + ' + crop.y + 'px)) ' +
+      'rotate(' + crop.r + 'deg) ' +
+      'scale(' + crop.z + ')';
+
+    var zoom = document.getElementById('cZoom');
+    var x = document.getElementById('cX');
+    var y = document.getElementById('cY');
+    var r = document.getElementById('cR');
+
+    var vZoom = document.getElementById('vZoom');
+    var vX = document.getElementById('vX');
+    var vY = document.getElementById('vY');
+    var vR = document.getElementById('vR');
+
+    if (zoom) zoom.value = Math.round(crop.z * 100);
+    if (x) x.value = Math.round(crop.x);
+    if (y) y.value = Math.round(crop.y);
+    if (r) r.value = Math.round(crop.r);
+
+    if (vZoom) vZoom.textContent = Math.round(crop.z * 100) + '%';
+    if (vX) vX.textContent = Math.round(crop.x);
+    if (vY) vY.textContent = Math.round(crop.y);
+    if (vR) vR.textContent = Math.round(crop.r) + '°';
+  }
+
+  function cropOpen(src) {
+    var img = cropImgEl();
+    var overlay = document.getElementById('cropOverlay');
+
+    if (!img || !overlay || !src) return;
+
+    img.onload = function () {
+      natW = img.naturalWidth || STAGE_W;
+      natH = img.naturalHeight || STAGE_H;
+
+      baseScale = Math.max(
+        STAGE_W / natW,
+        STAGE_H / natH
+      );
+
+      img.style.width = Math.round(natW * baseScale) + 'px';
+      img.style.height = 'auto';
+
+      crop.z = 1;
+      crop.x = 0;
+      crop.y = 0;
+      crop.r = 0;
+
+      cropRender();
+      overlay.classList.add('on');
+    };
+
+    img.onerror = function () {
+      flash('照片加载失败，请重新选择图片', true);
+    };
+
+    /*
+     * 先清空再赋值，确保选择同一张图片时也能重新触发 onload。
+     */
+    img.removeAttribute('src');
+    img.src = src;
+  }
+
+  function cropClose() {
+    var overlay = document.getElementById('cropOverlay');
+
+    if (overlay) {
+      overlay.classList.remove('on');
+    }
+  }
+
+  function cropPickNew() {
+    if (photoInput) {
+      photoInput.click();
+    }
+  }
+
+  function cropReset() {
+    crop.z = 1;
+    crop.x = 0;
+    crop.y = 0;
+    crop.r = 0;
+
+    cropRender();
+  }
+
+  function cropApply() {
+    var img = cropImgEl();
+    if (!img || !img.src) return;
+
+    var W = STAGE_W * CANVAS_K;
+    var H = STAGE_H * CANVAS_K;
+
+    var cv = document.createElement('canvas');
+    cv.width = W;
+    cv.height = H;
+
+    var ctx = cv.getContext('2d');
+
+    if (!ctx) {
+      flash('当前浏览器不支持照片处理，请更换 Chrome 或 Edge', true);
+      return;
+    }
+
+    ctx.fillStyle = '#3c4348';
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.save();
+
+    ctx.translate(
+      W / 2 + crop.x * CANVAS_K,
+      H / 2 + crop.y * CANVAS_K
+    );
+
+    ctx.rotate(crop.r * Math.PI / 180);
+
+    var scale = crop.z * baseScale * CANVAS_K;
+
+    ctx.scale(scale, scale);
+    ctx.drawImage(img, -natW / 2, -natH / 2);
+    ctx.restore();
+
+    var data = null;
+
+    try {
+      data = cv.toDataURL('image/jpeg', 0.9);
+    } catch (e) {}
+
+    if (!data) {
+      flash('照片处理失败，请换一张图片重试', true);
+      return;
+    }
+
+    setPhoto(data);
+
+    var photoSaved = true;
+
+    try {
+      localStorage.setItem(PHOTO_KEY, data);
+    } catch (e2) {
+      photoSaved = false;
+    }
+
+    var contentSaved = saveNow();
+
+    cropClose();
+
+    if (photoSaved && contentSaved) {
+      flash('照片已按取景框裁剪并应用');
+    } else {
+      flash(
+        '照片已应用，但浏览器暂存空间不足，请立即使用“另存为文件”备份',
+        true
+      );
+    }
+  }
+
+  function bindCrop() {
+    var stage = cropStage();
+    var overlay = document.getElementById('cropOverlay');
+
+    var zoom = document.getElementById('cZoom');
+    var x = document.getElementById('cX');
+    var y = document.getElementById('cY');
+    var r = document.getElementById('cR');
+
+    if (!stage || !overlay || !zoom || !x || !y || !r) return;
+    if (stage.__cropBound) return;
+
+    stage.__cropBound = true;
+    stage.style.touchAction = 'none';
+
+    zoom.addEventListener('input', function () {
+      crop.z = Number(zoom.value) / 100;
+      cropRender();
+    });
+
+    x.addEventListener('input', function () {
+      crop.x = Number(x.value);
+      cropRender();
+    });
+
+    y.addEventListener('input', function () {
+      crop.y = Number(y.value);
+      cropRender();
+    });
+
+    r.addEventListener('input', function () {
+      crop.r = Number(r.value);
+      cropRender();
+    });
+
+    /*
+     * Pointer Events 同时支持鼠标、触控笔和触屏。
+     */
+    var dragging = false;
+    var pointerId = null;
+    var lastX = 0;
+    var lastY = 0;
+
+    stage.addEventListener('pointerdown', function (e) {
+      dragging = true;
+      pointerId = e.pointerId;
+      lastX = e.clientX;
+      lastY = e.clientY;
+
+      try {
+        stage.setPointerCapture(pointerId);
+      } catch (err) {}
+
+      e.preventDefault();
+    });
+
+    stage.addEventListener('pointermove', function (e) {
+      if (!dragging || e.pointerId !== pointerId) return;
+
+      crop.x += e.clientX - lastX;
+      crop.y += e.clientY - lastY;
+
+      lastX = e.clientX;
+      lastY = e.clientY;
+
+      crop.x = Math.max(-300, Math.min(300, crop.x));
+      crop.y = Math.max(-350, Math.min(350, crop.y));
+
+      cropRender();
+      e.preventDefault();
+    });
+
+    function stopDragging(e) {
+      if (!dragging) return;
+
+      if (
+        e &&
+        pointerId !== null &&
+        e.pointerId !== undefined &&
+        e.pointerId !== pointerId
+      ) {
+        return;
+      }
+
+      dragging = false;
+
+      try {
+        if (pointerId !== null) {
+          stage.releasePointerCapture(pointerId);
+        }
+      } catch (err) {}
+
+      pointerId = null;
+    }
+
+    stage.addEventListener('pointerup', stopDragging);
+    stage.addEventListener('pointercancel', stopDragging);
+    stage.addEventListener('lostpointercapture', stopDragging);
+
+    stage.addEventListener('wheel', function (e) {
+      e.preventDefault();
+
+      var change = e.deltaY < 0 ? 0.08 : -0.08;
+
+      crop.z = Math.max(
+        0.4,
+        Math.min(3, Number((crop.z + change).toFixed(2)))
+      );
+
+      cropRender();
+    }, { passive: false });
+
+    overlay.addEventListener('click', function (e) {
+      if (e.target === overlay) {
+        cropClose();
+      }
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (
+        e.key === 'Escape' &&
+        overlay.classList.contains('on')
+      ) {
+        cropClose();
+      }
+    });
+  }
+
+  /* ──────────────────────────────
+     照片读取、点击、拖入
+  ────────────────────────────── */
+
+  function readPhoto(file) {
+    if (!file || !file.type || file.type.indexOf('image/') !== 0) {
+      flash('请选择图片文件，例如 JPG、PNG 或 WebP', true);
+      return;
+    }
+
+    /*
+     * 防止用户误选特别大的图片导致浏览器卡顿。
+     * 这里只警告，不强制禁止。
+     */
+    if (file.size > 20 * 1024 * 1024) {
+      flash('图片超过 20MB，正在尝试读取；如浏览器卡顿，请先压缩图片', true);
+    }
+
+    var reader = new FileReader();
+
+    reader.onload = function (ev) {
+      rawPhotoData = ev.target.result || '';
+
+      if (!rawPhotoData) {
+        flash('图片读取失败，请重新选择', true);
+        return;
+      }
+
+      cropOpen(rawPhotoData);
+    };
+
+    reader.onerror = function () {
+      flash('图片读取失败，请换一张图片或改用拖拽方式', true);
+    };
+
+    reader.readAsDataURL(file);
+  }
+
+  if (photoInput) {
+    photoInput.addEventListener('change', function () {
+      var file =
+        photoInput.files &&
+        photoInput.files.length
+          ? photoInput.files[0]
+          : null;
+
+      if (file) {
+        readPhoto(file);
+      }
+
+      /*
+       * 清空 input，保证再次选择同一张图片也能触发 change。
+       */
+      photoInput.value = '';
+    });
+  }
+
+  function bindPhoto() {
+    var box = document.getElementById('photoBox');
+
+    if (!box || box.__photoBound) return;
+
+    box.__photoBound = true;
+
+    /*
+     * 让照片框能够获得键盘焦点，
+     * 这样按 Delete / Backspace 可以清除照片。
+     */
+    box.tabIndex = 0;
+
+    box.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+
+      box.focus();
+
+      if (rawPhotoData) {
+        cropOpen(rawPhotoData);
+        return;
+      }
+
+      /*
+       * 导出的 HTML 中可能只有裁剪后的照片。
+       * 此时允许用户继续基于裁剪后的照片调整。
+       */
+      var currentImg = document.getElementById('photoImg');
+      var currentSrc = currentImg
+        ? currentImg.getAttribute('src')
+        : '';
+
+      if (currentSrc) {
+        cropOpen(currentSrc);
+      } else if (photoInput) {
+        photoInput.click();
+      }
+    });
+
+    box.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        box.click();
+      }
+    });
+
+    box.addEventListener('dragover', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      box.style.borderColor = '#ffffff';
+    });
+
+    box.addEventListener('dragleave', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+
+      var img = document.getElementById('photoImg');
+
+      box.style.borderColor =
+        img && img.style.display === 'block'
+          ? 'transparent'
+          : '#9fb3c0';
+    });
+
+    box.addEventListener('drop', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+
+      var img = document.getElementById('photoImg');
+
+      box.style.borderColor =
+        img && img.style.display === 'block'
+          ? 'transparent'
+          : '#9fb3c0';
+
+      var file =
+        e.dataTransfer &&
+        e.dataTransfer.files &&
+        e.dataTransfer.files.length
+          ? e.dataTransfer.files[0]
+          : null;
+
+      if (file) {
+        readPhoto(file);
+      }
+    });
+  }
+
+  function clearPhotoNow() {
+    var els = getPhotoElements();
+
+    if (!els.img) return;
+
+    var hasPhoto =
+      els.img.getAttribute('src') ||
+      els.img.style.display === 'block';
+
+    if (!hasPhoto) return;
+
+    els.img.removeAttribute('src');
+    els.img.style.display = 'none';
+
+    if (els.tip) {
+      els.tip.style.display = '';
+    }
+
+    if (els.box) {
+      els.box.style.borderStyle = 'dashed';
+      els.box.style.borderColor = '#9fb3c0';
+    }
+
+    rawPhotoData = '';
+
+    /*
+     * 同时清空裁剪窗口中的大图，释放内存。
+     */
+    var cropImg = cropImgEl();
+
+    if (cropImg) {
+      cropImg.removeAttribute('src');
+      cropImg.style.width = '';
+      cropImg.style.height = '';
+      cropImg.style.transform = '';
+    }
+
+    try {
+      localStorage.removeItem(PHOTO_KEY);
+      localStorage.removeItem(RAW_KEY);
+    } catch (e) {}
+
+    saveNow();
+    flash('证件照已清除');
+  }
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+
+    var box = document.getElementById('photoBox');
+    if (!box) return;
+
+    var activeInBox = document.activeElement === box;
+
+    var selection = window.getSelection();
+    var node = selection ? selection.anchorNode : null;
+    var element = node
+      ? (node.nodeType === 1 ? node : node.parentNode)
+      : null;
+
+    var selectionInBox = false;
+
+    while (element) {
+      if (element === box) {
+        selectionInBox = true;
+        break;
+      }
+
+      element = element.parentNode;
+    }
+
+    if (activeInBox || selectionInBox) {
+      var img = document.getElementById('photoImg');
+
+      if (img && img.getAttribute('src')) {
+        e.preventDefault();
+        clearPhotoNow();
+      }
+    }
+  });
+
+  /* ──────────────────────────────
+     粘贴处理
+  ────────────────────────────── */
+
+  document.addEventListener('paste', function (e) {
+    var clipboard = e.clipboardData;
+    var items = clipboard && clipboard.items;
+
+    /*
+     * 剪贴板中有图片时，优先作为证件照处理。
+     */
+    if (items) {
+      for (var i = 0; i < items.length; i++) {
+        if (
+          items[i].type &&
+          items[i].type.indexOf('image/') === 0
+        ) {
+          var file = items[i].getAsFile();
+
+          if (file) {
+            e.preventDefault();
+            readPhoto(file);
+          }
+
+          return;
+        }
+      }
+    }
+
+    /*
+     * 在可编辑区域粘贴时只保留纯文本，
+     * 防止从 Word 或网页带入字体、颜色和复杂标签。
+     */
+    var target = e.target;
+    var editable = null;
+
+    if (target && target.closest) {
+      editable = target.closest('[contenteditable="true"]');
+    }
+
+    if (!editable || !resume.contains(editable)) return;
+
+    var text = clipboard
+      ? clipboard.getData('text/plain')
+      : '';
+
+    if (!text) return;
+
+    e.preventDefault();
+
+    var inserted = false;
+
+    try {
+      inserted = document.execCommand(
+        'insertText',
+        false,
+        text
+      );
+    } catch (err) {}
+
+    if (!inserted) {
+      var selection = window.getSelection();
+
+      if (selection && selection.rangeCount) {
+        var range = selection.getRangeAt(0);
+
+        range.deleteContents();
+
+        var textNode = document.createTextNode(text);
+        range.insertNode(textNode);
+        range.setStartAfter(textNode);
+        range.collapse(true);
+
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+    }
+
+    saveNow();
+  });
+
+  /* ──────────────────────────────
+     提示行
+  ────────────────────────────── */
+
+  function toggleTips(btn) {
+    var hidden = document.body.classList.toggle('hideTips');
+
+    if (btn) {
+      btn.textContent = hidden
+        ? '显示提示行'
+        : '清除提示行';
+    }
+  }
+
+  /* ──────────────────────────────
+     新增与删除工作经历
+  ────────────────────────────── */
+
+  function addExperience() {
+    var point = ensureExperienceInsertPoint();
+
+    if (!point) {
+      flash(
+        '未找到工作经历插入位置，请恢复模板后重试',
+        true
+      );
+      return;
+    }
+
+    var block = document.createElement('div');
+    block.className = 'expBlock';
+
+  block.innerHTML =
+    '<div class="delRow">' +
+      '<span class="delBtn" title="删除这段经历">' +
+        '✕ 删除这段经历' +
+      '</span>' +
+    '</div>' +
+
+    '<div class="jobHead" contenteditable="true">' +
+      '<span>【起止时间】</span>' +
+      '<span class="co">【公司名称】</span>' +
+      '<span>【职位名称】</span>' +
+    '</div>' +
+
+    '<ul contenteditable="true">' +
+      '<li>【填写你负责的具体工作】</li>' +
+      '<li>【填写使用的技术、工具、方法或工作流程】</li>' +
+      '<li>【填写实际成果；没有准确数据时不要编造数字】</li>' +
+    '</ul>' +
+
+    '<div class="tip">' +
+      '填写建议：每条按“行动＋方法＋结果”描述，内容应当真实、准确且可以核实。' +
+    '</div>';
+
+
+    point.parentNode.insertBefore(block, point);
+
+    var first = block.querySelector('.jobHead span');
+
+    if (first) {
+      first.focus();
+      placeCaret(first);
+    }
+
+    saveNow();
+
+    flash(
+      '已插入一段空白经历；不需要时可点击该段上方“✕ 删除这段经历”'
+    );
+  }
+
+  function placeCaret(el) {
+    try {
+      var range = document.createRange();
+
+      range.selectNodeContents(el);
+      range.collapse(false);
+
+      var selection = window.getSelection();
+
+      selection.removeAllRanges();
+      selection.addRange(range);
+    } catch (e) {}
+  }
+
+  resume.addEventListener('click', function (e) {
+    var target = e.target;
+
+    var button =
+      target &&
+      target.classList &&
+      target.classList.contains('delBtn')
+        ? target
+        : null;
+
+    if (!button) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    var block = button.closest
+      ? button.closest('.expBlock')
+      : null;
+
+    if (!block) return;
+
+    if (confirm('确定删除这段工作经历？')) {
+      block.parentNode.removeChild(block);
+      saveNow();
+      flash('该段工作经历已删除');
+    }
+  });
+
+  /* ──────────────────────────────
+     导出 HTML
+  ────────────────────────────── */
+
+  function createExportStorageId() {
+    return (
+      Date.now().toString(36) +
+      '_' +
+      Math.random().toString(36).slice(2, 9)
+    );
+  }
+
+  function buildHTML() {
+    var clone = document.documentElement.cloneNode(true);
+
+    var state = clone.querySelector('#saveState');
+
+    if (state) {
+      state.textContent = '已自动暂存';
+      state.removeAttribute('style');
+    }
+
+    var envWarn = clone.querySelector('#envWarn');
+
+    if (envWarn) {
+      envWarn.style.display = 'none';
+    }
+
+    /*
+     * 导出时关闭裁剪窗口，并清除裁剪窗口里的原始大图。
+     * 简历照片 #photoImg 会正常保留。
+     */
+    var overlay = clone.querySelector('#cropOverlay');
+
+    if (overlay) {
+      overlay.classList.remove('on');
+    }
+
+    var cropImg = clone.querySelector('#cropImg');
+
+    if (cropImg) {
+      cropImg.removeAttribute('src');
+      cropImg.removeAttribute('style');
+    }
+
+    clone.querySelector('body').classList.remove('printing');
+
+    /*
+     * 为每一个导出的 HTML 创建独立的缓存名称。
+     * 防止它打开后被在线模板或其他简历的缓存覆盖。
+     */
+    var exportId = createExportStorageId();
+
+    var scripts = clone.querySelectorAll('script');
+
+    for (var i = 0; i < scripts.length; i++) {
+      var code = scripts[i].textContent || '';
+
+    if (
+      code.indexOf('var KEY =') === -1 ||
+      code.indexOf('var PHOTO_KEY =') === -1
+    ) {
+      continue;
+    }
+
+      code = code.replace(
+        /var KEY = '[^']+';/,
+        "var KEY = 'robot_resume_editor_export_" +
+          exportId +
+          "';"
+      );
+
+      code = code.replace(
+        /var PHOTO_KEY = '[^']+';/,
+        "var PHOTO_KEY = 'robot_resume_editor_photo_export_" +
+          exportId +
+          "';"
+      );
+
+      code = code.replace(
+        /var RAW_KEY = '[^']+';/,
+        "var RAW_KEY = 'robot_resume_editor_raw_export_" +
+          exportId +
+          "';"
+      );
+
+      scripts[i].textContent = code;
+    }
+
+    return clone.outerHTML;
+  }
+
+  function fileName() {
+    var nameElement = resume.querySelector('.name');
+
+    var name = nameElement
+      ? nameElement.textContent.trim()
+      : '简历';
+
+    name = name.replace(
+      /[\\\/:*?"<>|【】\s]/g,
+      ''
+    );
+
+    if (!name) {
+      name = '简历';
+    }
+
+    return name + '_个人简历.html';
+  }
+
+  async function copyText(text) {
+    try {
+      if (
+        navigator.clipboard &&
+        navigator.clipboard.writeText
+      ) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch (e) {}
+
+    try {
+      var textarea = document.createElement('textarea');
+
+      textarea.value = text;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'fixed';
+      textarea.style.left = '-9999px';
+      textarea.style.top = '0';
+
+      document.body.appendChild(textarea);
+
+      textarea.focus();
+      textarea.select();
+      textarea.setSelectionRange(0, textarea.value.length);
+
+      var result = document.execCommand('copy');
+
+      textarea.parentNode.removeChild(textarea);
+
+      return result;
+    } catch (e2) {
+      return false;
+    }
+  }
+
+  async function downloadHTML() {
+    saveNow();
+
+    var html = buildHTML();
+    var name = fileName();
+    var fullHTML = '<!DOCTYPE html>\n' + html;
+
+    /*
+     * 第一方案：Blob 下载。
+     */
+    try {
+      if (
+        !window.Blob ||
+        !window.URL ||
+        !URL.createObjectURL
+      ) {
+        throw new Error('Blob download is unavailable');
+      }
+
+      var blob = new Blob(
+        [fullHTML],
+        { type: 'text/html;charset=utf-8' }
+      );
+
+      var url = URL.createObjectURL(blob);
+      var link = document.createElement('a');
+
+      link.href = url;
+      link.download = name;
+      link.style.display = 'none';
+
+      document.body.appendChild(link);
+      link.click();
+
+      setTimeout(function () {
+        URL.revokeObjectURL(url);
+
+        if (link.parentNode) {
+          link.parentNode.removeChild(link);
+        }
+      }, 1500);
+
+      flash(
+        '已触发下载：' + name +
+        '。如未看到文件，请检查浏览器下载记录'
+      );
+
+      return;
+    } catch (e) {}
+
+    /*
+     * 第二方案：Data URI 下载。
+     */
+    try {
+      var link2 = document.createElement('a');
+
+      link2.href =
+        'data:text/html;charset=utf-8,' +
+        encodeURIComponent(fullHTML);
+
+      link2.download = name;
+      link2.style.display = 'none';
+
+      document.body.appendChild(link2);
+      link2.click();
+
+      setTimeout(function () {
+        if (link2.parentNode) {
+          link2.parentNode.removeChild(link2);
+        }
+      }, 1000);
+
+      flash('已使用备用方式触发下载');
+      return;
+    } catch (e2) {}
+
+    /*
+     * 第三方案：新窗口生成。
+     */
+    var win = null;
+
+    try {
+      win = window.open('', '_blank');
+    } catch (e3) {}
+
+    if (win && win.document) {
+      try {
+        win.document.open();
+        win.document.write(fullHTML);
+        win.document.close();
+
+        flash(
+          '下载被拦截，已在新窗口生成，请在新窗口按 Ctrl+S 保存',
+          true
+        );
+
+        return;
+      } catch (e4) {}
+    }
+
+    /*
+     * 最后方案：复制完整源码。
+     */
+    var copied = await copyText(fullHTML);
+
+    flash(
+      copied
+        ? '下载被拦截，完整代码已复制；请粘贴到记事本并另存为 ' +
+          name +
+          '，编码选择 UTF-8'
+        : '当前环境禁止下载和复制，请改用 Chrome 或 Edge 打开本文件',
+      true
+    );
+  }
+
+  async function copyHTML() {
+    saveNow();
+
+    var fullHTML =
+      '<!DOCTYPE html>\n' +
+      buildHTML();
+
+    var copied = await copyText(fullHTML);
+
+    flash(
+      copied
+        ? '完整代码已复制：粘贴到记事本，另存为 .html，编码选择 UTF-8'
+        : '复制失败，请使用“另存为文件”功能',
+      !copied
+    );
+  }
+
+  /* ──────────────────────────────
+     打开与打印
+  ────────────────────────────── */
+
+  function openInBrowser() {
+    saveNow();
+
+    var url = location.href;
+    var win = null;
+
+    try {
+      win = window.open(url, '_blank');
+    } catch (e) {}
+
+    if (win) {
+      flash('已在新标签页打开，请在新标签页中继续编辑或导出');
+      return;
+    }
+
+    var warning = document.getElementById('envWarn');
+    var path = document.getElementById('envPath');
+
+    if (path) {
+      try {
+        path.textContent =
+          decodeURIComponent(
+            location.pathname.replace(/^\/+/, '')
+          ) ||
+          '请使用“另存为文件”或“复制全部代码”';
+      } catch (e2) {
+        path.textContent =
+          '请使用“另存为文件”或“复制全部代码”';
+      }
+    }
+
+    if (warning) {
+      warning.style.display = 'block';
+    }
+
+    flash(
+      '弹窗被浏览器拦截，请允许本站弹出窗口后重试',
+      true
+    );
+  }
+
+  function doPrint() {
+    saveNow();
+
+    flash(
+      '已准备打印：目标选择“另存为 PDF”，并在“更多设置”中勾选“背景图形”'
+    );
+
+    setTimeout(function () {
+      try {
+        window.print();
+      } catch (e) {
+        flash(
+          '当前环境不支持打印，请使用 Chrome 或 Edge 打开后按 Ctrl+P',
+          true
+        );
+      }
+    }, 320);
+  }
+
+  /* ──────────────────────────────
+     环境检测与恢复模板
+  ────────────────────────────── */
+
+  function detectEnv() {
+    var limited = false;
+
+    try {
+      if (window.top !== window.self) {
+        limited = true;
+      }
+    } catch (e) {
+      limited = true;
+    }
+
+    if (
+      limited ||
+      location.protocol === 'about:' ||
+      location.protocol === 'blob:' ||
+      location.protocol === 'data:'
+    ) {
+      var warning = document.getElementById('envWarn');
+      var path = document.getElementById('envPath');
+
+      if (path) {
+        try {
+          path.textContent =
+            decodeURIComponent(
+              location.pathname.replace(/^\/+/, '')
+            ) ||
+            '请使用“另存为文件”或“复制全部代码”';
+        } catch (e2) {
+          path.textContent =
+            '请使用“另存为文件”或“复制全部代码”';
+        }
+      }
+
+      if (warning) {
+        warning.style.display = 'block';
+      }
+    }
+  }
+  function resetTemplate() {
+  var confirmed = confirm(
+    '确定放弃当前所有修改并恢复空白模板？\n\n' +
+    '此操作会清除当前浏览器中的文字和照片暂存，且无法撤销。'
+  );
+
+  if (!confirmed) return;
+
+  /*
+   * 阻止页面关闭或刷新时把旧内容重新写回缓存。
+   */
+  isResetting = true;
+
+  /*
+   * 取消可能尚未执行的 300ms 自动保存任务。
+   */
+  clearTimeout(timer);
+  clearTimeout(flashTimer);
+
+  rawPhotoData = '';
+
+  try {
+    /* 清除当前版本缓存 */
+    localStorage.removeItem(KEY);
+    localStorage.removeItem(PHOTO_KEY);
+    localStorage.removeItem(RAW_KEY);
+
+    /* 清除旧正式版缓存 */
+    localStorage.removeItem('open_robot_resume_public_v1');
+    localStorage.removeItem('open_robot_resume_public_photo_v1');
+    localStorage.removeItem('open_robot_resume_public_raw_v1');
+
+    localStorage.removeItem('open_robot_resume_public_v2');
+    localStorage.removeItem('open_robot_resume_public_photo_v2');
+    localStorage.removeItem('open_robot_resume_public_raw_v2');
+
+    /* 清除开发阶段缓存 */
+    localStorage.removeItem('resume_v1');
+    localStorage.removeItem('resume_photo_v1');
+    localStorage.removeItem('resume_photo_raw_v1');
+
+    localStorage.removeItem('robot_resume_editor_v2');
+    localStorage.removeItem('robot_resume_editor_photo_v2');
+    localStorage.removeItem('robot_resume_editor_photo_raw_v2');
+  } catch (e) {}
+
+  /*
+   * 直接恢复文件中保存的原始空白模板。
+   * 不使用 location.reload()，避免 beforeunload 重新保存旧内容。
+   */
+  resume.innerHTML = DEFAULT_RESUME_HTML;
+
+  /*
+   * 恢复页面显示状态。
+   */
+  document.body.classList.remove('hideTips');
+  document.body.classList.remove('printing');
+
+  var overlay = document.getElementById('cropOverlay');
+  if (overlay) {
+    overlay.classList.remove('on');
+  }
+
+  var cropImg = document.getElementById('cropImg');
+  if (cropImg) {
+    cropImg.removeAttribute('src');
+    cropImg.style.width = '';
+    cropImg.style.height = '';
+    cropImg.style.transform = '';
+  }
+
+  if (photoInput) {
+    photoInput.value = '';
+  }
+
+  /*
+   * innerHTML 被恢复后，照片框是一个新的元素，
+   * 因此需要重新绑定事件。
+   */
+  ensureExperienceInsertPoint();
+  bindPhoto();
+
+  /*
+   * 恢复提示按钮文字。
+   */
+  var toolbarButtons = document.querySelectorAll('.toolbar button');
+
+  for (var i = 0; i < toolbarButtons.length; i++) {
+    if (
+      toolbarButtons[i].getAttribute('onclick') ===
+      'toggleTips(this)'
+    ) {
+      toolbarButtons[i].textContent = '清除提示行';
+      break;
+    }
+  }
+
+  /*
+   * 将恢复后的空白模板保存为当前状态。
+   */
+  isResetting = false;
+  saveNow();
+
+  flash('已恢复为空白模板');
+}
+
+
+
+  /* ──────────────────────────────
+     打印事件
+  ────────────────────────────── */
+
+  window.addEventListener('beforeprint', function () {
+    document.body.classList.add('printing');
+  });
+
+  window.addEventListener('afterprint', function () {
+    document.body.classList.remove('printing');
+  });
+
+  /* ──────────────────────────────
+     初始化
+  ────────────────────────────── */
+
+  restore();
+  bindPhoto();
+  bindCrop();
+  detectEnv();
+</script>
+
+
+</body>
+</html>
